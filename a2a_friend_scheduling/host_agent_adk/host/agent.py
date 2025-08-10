@@ -105,10 +105,7 @@ class HostAgent:
             description="This Host agent scrapes the car information from websites and fetch carfax reports", #change discription
             tools=[
                 self.send_message,
-                book_pickleball_court,
-                list_court_availabilities,
-                carAgent,
-                carfaxAgent,
+                
             ], #Remove book_pickleball_court and list_court_availabilities add Car Agent and Carfax Agent tools
         )   
 #Debug: Model Prompt: 
