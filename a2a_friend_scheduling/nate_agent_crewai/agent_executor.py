@@ -12,11 +12,11 @@ from a2a.utils.errors import ServerError
 from agent import SchedulingAgent
 
 
-class SchedulingAgentExecutor(AgentExecutor):
+class CarfaxAgentExecutor(AgentExecutor):
     """AgentExecutor for the scheduling agent."""
 
     def __init__(self):
-        """Initializes the SchedulingAgentExecutor."""
+        """Initializes the CarfaxAgentExecutor."""
         self.agent = SchedulingAgent()
 
     async def execute(
@@ -24,7 +24,7 @@ class SchedulingAgentExecutor(AgentExecutor):
         context: RequestContext,
         event_queue: EventQueue,
     ) -> None:
-        """Executes the scheduling agent."""
+        """Executes the Carfax agent."""
         if not context.task_id or not context.context_id:
             raise ValueError("RequestContext must have task_id and context_id")
         if not context.message:

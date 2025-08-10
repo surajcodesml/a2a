@@ -17,7 +17,7 @@ from a2a.types import (
     AgentSkill,
 )
 from agent import SchedulingAgent
-from agent_executor import SchedulingAgentExecutor
+from agent_executor import CarfaxAgentExecutor
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -31,30 +31,31 @@ class MissingAPIKeyError(Exception):
 
 
 def main():
-    """Entry point for Nate's Scheduling Agent."""
-    host = "localhost"
-    port = 10003
+    """Entry point for Carfax Agent"""
+    host = "localhost" # DEBUG: Change to Nirajs MCP host"
+    port = 10003 #change port
     try:
         if not os.getenv("GOOGLE_API_KEY"):
             raise MissingAPIKeyError("GOOGLE_API_KEY environment variable not set.")
 
         capabilities = AgentCapabilities(streaming=False)
         skill = AgentSkill(
-            id="availability_checker",
-            name="Availability Checker",
-            description="Check my calendar to see when I'm available for a pickleball game.",
-            tags=["schedule", "availability", "calendar"],
+            id="carfax_report_fetcher",
+            name="Carfax Report Fetcher",
+            description="fetch the carfax report for the car with the given VIN",
+            tags=["vin", "report", "vehicle"],
             examples=[
-                "Are you free tomorrow?",
-                "Can you play pickleball next Tuesday at 5pm?",
+                "What does the Carfax say about this VIN?",
+                "Can you fetch the Carfax report for this vehicle?",
             ],
         )
-
-        agent_host_url = os.getenv("HOST_OVERRIDE") or f"http://{host}:{port}/"
+#DEBUG: WHY?
+        #agent_host_url = os.getenv("HOST_OVERRIDE") or f"http://{host}:{port}/"
+        
         agent_card = AgentCard(
-            name="Nate Agent",
-            description="A friendly agent to help you schedule a pickleball game with Nate.",
-            url=agent_host_url,
+            name="Carfax Agent",
+            description=" An agent that fetches Carfax reports for vehicles using VINs.",
+            url=f"http://{host}:{port}/", #removed agent_host_url
             version="1.0.0",
             defaultInputModes=SchedulingAgent.SUPPORTED_CONTENT_TYPES,
             defaultOutputModes=SchedulingAgent.SUPPORTED_CONTENT_TYPES,
@@ -63,7 +64,7 @@ def main():
         )
 
         request_handler = DefaultRequestHandler(
-            agent_executor=SchedulingAgentExecutor(),
+            agent_executor=CarfaxAgentExecutor(),
             task_store=InMemoryTaskStore(),
         )
         server = A2AStarletteApplication(

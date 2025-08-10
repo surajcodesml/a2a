@@ -1,5 +1,6 @@
 import os
 import random
+import requests
 from datetime import date, datetime, timedelta
 from typing import Type
 
@@ -10,6 +11,9 @@ from pydantic import BaseModel, Field
 
 load_dotenv()
 
+def generate_carfax_report(vin: str) -> str:
+    """Generates a Carfax report for the given VIN."""
+    
 
 def generate_calendar() -> dict[str, list[str]]:
     """Generates a random calendar for the next 7 days."""
@@ -30,7 +34,125 @@ def generate_calendar() -> dict[str, list[str]]:
 
 MY_CALENDAR = generate_calendar()
 
+class CarfaxToolInput(BaseModel):
+    """Input schema for CarfaxTool."""
+    
+    vin: str = Field(
+        ...,
+        description="The Vehicle Identification Number (VIN) to get the Carfax report for. Should be a 17-character alphanumeric string.",
+    )
+    
+class CarfaxTool(BaseTool):
+    """Tool to fetch Carfax reports."""
+    
+    name: str = "Carfax Report Fetcher"
+    description: str = (
+        "Fetches a Carfax report for a given Vehicle Identification Number (VIN). "
+        "Use this to get vehicle history and report details."
+    )
+    args_schema: Type[BaseModel] = CarfaxToolInput
 
+    def _run(self, vin: str) -> str:
+        """Fetches Carfax report for the given VIN."""
+        try:
+            # Validate VIN format (basic check)
+            if not vin or len(vin) != 17:
+                return "Invalid VIN format. VIN should be 17 characters long."
+            
+            # Make API call to the Carfax endpoint
+            url = f"https://proxy402.com/rZ0Or4VKA9?vin={vin}"
+            response = requests.get(url, timeout=30)
+            
+            if response.status_code == 200:
+                return f"Carfax report for VIN {vin}:\n{response.text}"
+            else:
+                return f"Failed to fetch Carfax report for VIN {vin}. Status code: {response.status_code}"
+                
+        except requests.exceptions.Timeout:
+            return f"Request timed out while fetching Carfax report for VIN {vin}."
+        except requests.exceptions.RequestException as e:
+            return f"Error fetching Carfax report for VIN {vin}: {str(e)}"
+        except Exception as e:
+            return f"Unexpected error occurred: {str(e)}"
+
+
+
+class CarfaxTool:
+    """Tool to fetch Carfax reports."""
+    
+    def __init__(self):
+        self.name = "Carfax Report Fetcher"
+        self.description = "Fetches a Carfax report for a given Vehicle Identification Number (VIN)."
+
+    def run(self, vin: str) -> str:
+        """Fetches Carfax report for the given VIN."""
+        try:
+            # Validate VIN format (basic check)
+            if not vin or len(vin) != 17:
+                return json.dumps({"error": "Invalid VIN format. VIN should be 17 characters long."})
+            
+            # Make API call to the Carfax endpoint
+            url = f"https://proxy402.com/rZ0Or4VKA9?vin={vin}"
+            
+            # Headers for authentication (you'll need to add the actual auth values)
+            headers = {
+                "x402": "payment_response_from_paystabl_agent",  # This should come from PayStabl_Agent
+                "Authorization": "Bearer agent_wallet_token"     # This should come from PayStabl_Agent
+            }
+            
+            response = requests.get(url, headers=headers, timeout=30)
+            
+            if response.status_code == 200:
+                # Parse JSON response
+                carfax_data = response.json()
+                return json.dumps(carfax_data, indent=2)
+            else:
+                return json.dumps({
+                    "error": f"Failed to fetch Carfax report for VIN {vin}. Status code: {response.status_code}"
+                })
+                
+        except requests.exceptions.Timeout:
+            return json.dumps({"error": f"Request timed out while fetching Carfax report for VIN {vin}."})
+        except requests.exceptions.RequestException as e:
+            return json.dumps({"error": f"Error fetching Carfax report for VIN {vin}: {str(e)}"})
+        except json.JSONDecodeError:
+            return json.dumps({"error": "Invalid JSON response from Carfax API"})
+        except Exception as e:
+            return json.dumps({"error": f"Unexpected error occurred: {str(e)}"})
+
+
+class CarfaxAgent:
+    """Agent that handles Carfax report fetching."""
+
+    SUPPORTED_CONTENT_TYPES = ["text/plain"]
+
+    def __init__(self):
+        """Initializes the CarfaxAgent."""
+        self.carfax_tool = CarfaxTool()
+
+    def invoke(self, query: str) -> str:
+        """Processes the user query and extracts VIN to fetch Carfax report."""
+        # Simple VIN extraction - you can make this more sophisticated
+        vin = self._extract_vin_from_query(query)
+        
+        if not vin:
+            return json.dumps({
+                "error": "No valid VIN found in the query. Please provide a 17-character VIN number."
+            })
+        
+        # Fetch the Carfax report
+        result = self.carfax_tool.run(vin)
+        return result
+
+    def _extract_vin_from_query(self, query: str) -> str:
+        """Extracts VIN from user query."""
+        words = query.split()
+        for word in words:
+            # Basic VIN validation - 17 alphanumeric characters
+            if len(word) == 17 and word.isalnum():
+                return word.upper()
+        return ""
+'''
 class AvailabilityToolInput(BaseModel):
     """Input schema for AvailabilityTool."""
 
@@ -83,55 +205,4 @@ class AvailabilityTool(BaseTool):
                 "Please ask to check availability for a date like 'YYYY-MM-DD'."
             )
 
-
-class SchedulingAgent:
-    """Agent that handles scheduling tasks."""
-
-    SUPPORTED_CONTENT_TYPES = ["text/plain"]
-
-    def __init__(self):
-        """Initializes the SchedulingAgent."""
-        if os.getenv("GOOGLE_API_KEY"):
-            self.llm = LLM(
-                model="gemini/gemini-2.0-flash",
-                api_key=os.getenv("GOOGLE_API_KEY"),
-            )
-        else:
-            raise ValueError("GOOGLE_API_KEY environment variable not set.")
-
-        self.scheduling_assistant = Agent(
-            role="Personal Scheduling Assistant",
-            goal="Check my calendar and answer questions about my availability.",
-            backstory=(
-                "You are a highly efficient and polite assistant. Your only job is "
-                "to manage my calendar. You are an expert at using the "
-                "Calendar Availability Checker tool to find out when I am free. You never "
-                "engage in conversations outside of scheduling."
-            ),
-            verbose=True,
-            allow_delegation=False,
-            tools=[AvailabilityTool()],
-            llm=self.llm,
-        )
-
-    def invoke(self, question: str) -> str:
-        """Kicks off the crew to answer a scheduling question."""
-        task_description = (
-            f"Answer the user's question about my availability. The user asked: '{question}'. "
-            f"Today's date is {date.today().strftime('%Y-%m-%d')}."
-        )
-
-        check_availability_task = Task(
-            description=task_description,
-            expected_output="A polite and concise answer to the user's question about my availability, based on the calendar tool's output.",
-            agent=self.scheduling_assistant,
-        )
-
-        crew = Crew(
-            agents=[self.scheduling_assistant],
-            tasks=[check_availability_task],
-            process=Process.sequential,
-            verbose=True,
-        )
-        result = crew.kickoff()
-        return str(result)
+'''
