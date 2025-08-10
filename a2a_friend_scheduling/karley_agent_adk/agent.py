@@ -1,42 +1,34 @@
-# agent.py
+# karley_agent_adk/agent.py
 import os
 from google.adk.agents.llm_agent import Agent as LlmAgent
-from google.adk.tools.mcp_tool.mcp_toolset import MCPToolset, HttpServerParameters
+from google.adk.tools.mcp_tool.mcp_toolset import MCPToolset, StdioServerParameters
 
 PAYSTABL_MCP_URL = os.getenv("PAYSTABL_MCP_URL", "http://localhost:3000/mcp")
-# Token used by your MCP to identify which wallet/agent to use.
-# If your MCP doesn't need it, leave empty.
 PAYSTABL_AGENT_TOKEN = os.getenv("PAYSTABL_AGENT_TOKEN", "")
 
 INSTRUCTION = """
-**Role:** You are the PayStabl Payments Agent. You execute payments for AI agents
-and return provider results.
-
-**Tools & Usage**
-- `pay_x402_api(url, agent_token?)`: For any URL that returns HTTP 402. Handles fetch → pay → retry.
-- `pay_address(to, amount, agent_token?)`: Send direct transfers.
-- `get_balance()`, `get_payment_history()`: Wallet status & history.
-
-**Behavior**
-- Be concise and stay strictly within payments.
-- If inputs are missing, ask once for exactly what's needed (URL, `agent_token`, `to`, `amount`, etc.).
+**Role:** You are the PayStabl Payments Agent. Handle x402 payments and simple transfers.
+- Use `pay_x402_api(url, agent_token?)` for HTTP 402 paywalls.
+- Use `pay_address(to, amount[, agent_token])` for direct transfers.
+- Use `get_balance()` and `get_payment_history()` for wallet balance and transaction history respectively.
+Stay concise and strictly payment-focused.
 """
 
 def create_agent() -> LlmAgent:
-    """Constructs the ADK agent for PayStabl using an existing HTTP MCP."""
     paystabl_mcp = MCPToolset(
-        connection_params=HttpServerParameters(
-            url=PAYSTABL_MCP_URL,
-            headers=(
-                {"Authorization": f"Bearer {PAYSTABL_AGENT_TOKEN}"}
-                if PAYSTABL_AGENT_TOKEN else {}
-            ),
+        connection_params=StdioServerParameters(
+            command="node",
+            args=["stdio_bridge.js"],
+            env={
+                "MCP_HTTP_URL": PAYSTABL_MCP_URL,
+                **({"MCP_BEARER": f"Bearer {PAYSTABL_AGENT_TOKEN}"} if PAYSTABL_AGENT_TOKEN else {})
+            },
         )
     )
 
     return LlmAgent(
-        model="gemini-2.5-flash-preview-04-17",
+        model="gemini-2.0-flash",
         name="PayStabl_Agent",
         instruction=INSTRUCTION,
-        tools=[paystabl_mcp],  # Exposes your MCP tools to the agent
+        tools=[paystabl_mcp],
     )
