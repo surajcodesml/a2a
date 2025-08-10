@@ -1,5 +1,5 @@
 [project]
-name = "karley-scheduling-agent"
+name = "paystabl-agent"
 version = "0.1.0"
 description = "Karley's scheduling agent for the A2A project."
 requires-python = ">=3.10"

@@ -24,16 +24,6 @@ from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from google.adk.tools.tool_context import ToolContext
 from google.genai import types
-#DEbug: remove this import: add car_tools
-from .pickleball_tools import (
-    book_pickleball_court,
-    list_court_availabilities,
-)
-
-from .car_tools import (
-    carAgent,
-    carfaxAgent,
-)
 
 from .remote_agent_connection import RemoteAgentConnections
 
@@ -42,14 +32,12 @@ nest_asyncio.apply()
 
 
 class HostAgent:
-    """The Host agent."""
+    """The Host agent that orchestrates Carfax (data) and PayStabl (payments)."""
 
-    def __init__(
-        self,
-    ):
+    def __init__(self):
         self.remote_agent_connections: dict[str, RemoteAgentConnections] = {}
         self.cards: dict[str, AgentCard] = {}
-        self.agents: str = ""
+        self.agents: str = ""  # rendered into the instruction
         self._agent = self.create_agent()
         self._user_id = "host_agent"
         self._runner = Runner(
@@ -61,14 +49,13 @@ class HostAgent:
         )
 
     async def _async_init_components(self, remote_agent_addresses: List[str]):
-        """Asynchronously initializes the components of the Host agent."""
         async with httpx.AsyncClient(timeout=30) as client:
             for address in remote_agent_addresses:
                 card_resolver = A2ACardResolver(client, address)
                 try:
                     card = await card_resolver.get_agent_card()
                     remote_connection = RemoteAgentConnections(
-                        agent_card=card, agent_url=address
+                        agent_card=card, agent_url=date_address(address)
                     )
                     self.remote_agent_connections[card.name] = remote_connection
                     self.cards[card.name] = card
@@ -78,71 +65,58 @@ class HostAgent:
                     print(f"ERROR: Failed to initialize connection for {address}: {e}")
 
         agent_info = [
-            json.dumps({"name": card.name, "description": card.description}) 
+            json.dumps({"name": card.name, "description": card.description})
             for card in self.cards.values()
         ]
         print("agent_info:", agent_info)
-        self.agents = "\n".join(agent_info) if agent_info else "No friends found"
+        self.agents = "\n".join(agent_info) if agent_info else "No agents discovered"
 
     @classmethod
-    async def create(
-        cls,
-        remote_agent_addresses: List[str],
-    ):
+    async def create(cls, remote_agent_addresses: List[str]):
         instance = cls()
         await instance._async_init_components(remote_agent_addresses)
         return instance
 
-#DEBUG Host Agent Config
     def create_agent(self) -> Agent:
-        """ Creates ADK Agent from the HostAgent's configuration.
-            
-        """
         return Agent(
-            model="gemini-2.0-flash", #check Model!!
+            model="gemini-2.0-flash",
             name="Host_Agent",
             instruction=self.root_instruction,
-            description="This Host agent scrapes the car information from websites and fetch carfax reports", #change discription
-            tools=[
-                self.send_message,
-                book_pickleball_court,
-                list_court_availabilities,
-                carAgent,
-                carfaxAgent,
-            ], #Remove book_pickleball_court and list_court_availabilities add Car Agent and Carfax Agent tools
-        )   
-#Debug: Model Prompt: 
+            description="Orchestrates VIN lookups by coordinating Carfax (data) and PayStabl (payments).",
+            tools=[self.send_message],
+        )
+
     def root_instruction(self, context: ReadonlyContext) -> str:
         return f"""
-        **Role:** You are the Host Agent, an expert scheduler for pickleball games. Your primary function is to coordinate with friend agents to find a suitable time to play and then book a court.
+        **Role:** You are the Host Agent. You coordinate between specialized agents:
+        - **Carfax Agent**: knows how to construct the VIN data endpoint and parse results.
+        - **PayStabl Agent**: pays 402-gated endpoints via stablecoins and returns raw bodies.
 
-        **Core Directives:**
+        **Goal:** Given a VIN, fetch its report from a 402-paywalled endpoint reliably:
+        1) Ask **Carfax Agent** for the URL (or to fetch data if it already knows the endpoint).
+        2) If the Carfax endpoint is 402-gated, instruct **PayStabl Agent** to pay and fetch:  
+           `pay402_and_fetch {{'url':'<carfax_url>', 'agent_token':'<optional>'}}`
+        3) Return the final parsed result to the user. Be concise and structured (JSON if appropriate).
 
-        *   **Initiate Planning:** When asked to schedule a game, first determine who to invite and the desired date range from the user.
-        *   **Task Delegation:** Use the `send_message` tool to ask each friend for their availability.
-            *   Frame your request clearly (e.g., "Are you available for pickleball between 2024-08-01 and 2024-08-03?").
-            *   Make sure you pass in the official name of the friend agent for each message request.
-        *   **Analyze Responses:** Once you have availability from all friends, analyze the responses to find common timeslots.
-        *   **Check Court Availability:** Before proposing times to the user, use the `list_court_availabilities` tool to ensure the court is also free at the common timeslots.
-        *   **Propose and Confirm:** Present the common, court-available timeslots to the user for confirmation.
-        *   **Book the Court:** After the user confirms a time, use the `book_pickleball_court` tool to make the reservation. This tool requires a `start_time` and an `end_time`.
-        *   **Transparent Communication:** Relay the final booking confirmation, including the booking ID, to the user. Do not ask for permission before contacting friend agents.
-        *   **Tool Reliance:** Strictly rely on available tools to address user requests. Do not generate responses based on assumptions.
-        *   **Readability:** Make sure to respond in a concise and easy to read format (bullet points are good).
-        *   Each available agent represents a friend. So Bob_Agent represents Bob.
-        *   When asked for which friends are available, you should return the names of the available friends (aka the agents that are active).
-        *   When get
+        **Tool:** `send_message(agent_name, task)` — Send plain text commands to a remote agent discovered below.
+
+        **Important Behavior:**
+        - Do not ask the user for details the agents already know. Be decisive and iterate quickly.
+        - Prefer JSON outputs for structured data.
+        - If a sub-agent returns raw body, summarize/parse for the user when possible.
 
         **Today's Date (YYYY-MM-DD):** {datetime.now().strftime("%Y-%m-%d")}
 
-        <Available Agents>
+        <Discovered Agents>
         {self.agents}
-        </Available Agents>
+        </Discovered Agents>
+
+        **Examples you can run via send_message:**
+        - To Carfax: "Given VIN 1HGCM82633A004352, produce the API URL to fetch the report."
+        - To PayStabl: "pay402_and_fetch {{'url':'http://localhost:9000/vin/TESTVIN'}}"
         """
 
-    async def stream(
-        self, query: str, session_id: str
-    ) -> AsyncIterable[dict[str, Any]]:
+    async def stream(self, query: str, session_id: str) -> AsyncIterable[dict[str, Any]]:
         """
         Streams the agent's response to a given query.
         """
@@ -164,34 +138,21 @@ class HostAgent:
         ):
             if event.is_final_response():
                 response = ""
-                if (
-                    event.content
-                    and event.content.parts
-                    and event.content.parts[0].text
-                ):
-                    response = "\n".join(
-                        [p.text for p in event.content.parts if p.text]
-                    )
-                yield {
-                    "is_task_complete": True,
-                    "content": response,
-                }
+                if event.content and event.content.parts and event.content.parts[0].text:
+                    response = "\n".join([p.text for p in event.content.parts if p.text])
+                yield {"is_task_complete": True, "content": response}
             else:
-                yield {
-                    "is_task_complete": False,
-                    "updates": "The host agent is thinking...",
-                }
+                yield {"is_task_complete": False, "updates": "The host agent is thinking..."}
 
     async def send_message(self, agent_name: str, task: str, tool_context: ToolContext):
-        """Sends a task to a remote car info agent."""
+        """Sends a task to a remote agent by name (as discovered from its Agent Card)."""
         if agent_name not in self.remote_agent_connections:
             raise ValueError(f"Agent {agent_name} not found")
         client = self.remote_agent_connections[agent_name]
-
         if not client:
             raise ValueError(f"Client not available for {agent_name}")
 
-        # Simplified task and context ID management
+        # Minimal task/context IDs; keep stable for replies if desired
         state = tool_context.state
         task_id = state.get("task_id", str(uuid.uuid4()))
         context_id = state.get("context_id", str(uuid.uuid4()))
@@ -213,9 +174,9 @@ class HostAgent:
         send_response: SendMessageResponse = await client.send_message(message_request)
         print("send_response", send_response)
 
-        if not isinstance(
-            send_response.root, SendMessageSuccessResponse
-        ) or not isinstance(send_response.root.result, Task):
+        if not isinstance(send_response.root, SendMessageSuccessResponse) or not isinstance(
+            send_response.root.result, Task
+        ):
             print("Received a non-success or non-task response. Cannot proceed.")
             return
 
@@ -229,22 +190,23 @@ class HostAgent:
                     resp.extend(artifact["parts"])
         return resp
 
-### agent tools and available agent defined
+
+def date_address(addr: str) -> str:
+    # Normalize any trailing slashes (optional helper)
+    return addr.rstrip("/")
+
+
 def _get_initialized_host_agent_sync():
     """Synchronously creates and initializes the HostAgent."""
 
     async def _async_main():
-        # Hardcoded URLs for the friend agents (change to car agent and carfax agent urls)
+        # Two-agent world for demo:
         friend_agent_urls = [
-            "http://localhost:10002",  # Karley's Agent 
-            "http://localhost:10003",  # Nate's Agent
-            "http://localhost:10004",  # Kaitlynn's Agent
+            "http://localhost:10002",  # PayStabl Agent (pay402_and_fetch)
+            "http://localhost:10003",  # Carfax Agent (constructs/knows VIN endpoint)
         ]
-
         print("initializing host agent")
-        hosting_agent_instance = await HostAgent.create(
-            remote_agent_addresses=friend_agent_urls
-        )
+        hosting_agent_instance = await HostAgent.create(remote_agent_addresses=friend_agent_urls)
         print("HostAgent initialized")
         return hosting_agent_instance.create_agent()
 
@@ -261,4 +223,4 @@ def _get_initialized_host_agent_sync():
             raise
 
 
-root_agent = _get_initialized_host_agent_sync() 
+root_agent = _get_initialized_host_agent_sync()
