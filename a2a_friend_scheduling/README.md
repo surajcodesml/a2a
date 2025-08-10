@@ -91,6 +91,6 @@ a2a_friend_scheduling/
 - **Secure Token Management**: Environment-based configuration for sensitive data
 
 ## References
-- [A2A Python SDK](https://github.com/google/a2a-python)
+- [A2A Python ADK](https://github.com/a2aproject/A2A)
 - [A2A Purchasing Concierge Codelab](https://codelabs.developers.google.com/intro-a2a-purchasing-concierge#1)
 - [X402 Payment Protocol Documentation](https://tools.ietf.org/html/rfc7234#section-6.5.2)
