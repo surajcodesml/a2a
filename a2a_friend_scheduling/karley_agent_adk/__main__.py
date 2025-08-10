@@ -5,13 +5,9 @@ import uvicorn
 from a2a.server.apps import A2AStarletteApplication
 from a2a.server.request_handlers import DefaultRequestHandler
 from a2a.server.tasks import InMemoryTaskStore
-from a2a.types import (
-    AgentCapabilities,
-    AgentCard,
-    AgentSkill,
-)
+from a2a.types import AgentCapabilities, AgentCard, AgentSkill
 from agent import create_agent
-from agent_executor import KarleyAgentExecutor
+from agent_executor import PayStablAgentExecutor
 from dotenv import load_dotenv
 from google.adk.artifacts import InMemoryArtifactService
 from google.adk.memory.in_memory_memory_service import InMemoryMemoryService
@@ -26,16 +22,15 @@ logger = logging.getLogger(__name__)
 
 class MissingAPIKeyError(Exception):
     """Exception for missing API key."""
-
     pass
 
 
 def main():
-    """Starts the agent server."""
+    """Starts the PayStabl A2A agent server."""
     host = "localhost"
     port = 10002
     try:
-        # Check for API key only if Vertex AI is not configured
+        # Require API key unless using Vertex
         if not os.getenv("GOOGLE_GENAI_USE_VERTEXAI") == "TRUE":
             if not os.getenv("GOOGLE_API_KEY"):
                 raise MissingAPIKeyError(
@@ -43,20 +38,26 @@ def main():
                 )
 
         capabilities = AgentCapabilities(streaming=True)
+
+        # Core capability: pay x402 endpoints
         skill = AgentSkill(
-            id="check_schedule",
-            name="Check Karley's Schedule",
-            description="Checks Karley's availability for a pickleball game on a given date.",
-            tags=["scheduling", "calendar"],
-            examples=["Is Karley free to play pickleball tomorrow?"],
+            id="pay_402",
+            name="Pay x402 Endpoint",
+            description=(
+                "Pays a 402-paywalled URL using stablecoins and returns the provider's result. "
+                "Inputs: { url, agent_token }."
+            ),
+            tags=["payments", "stablecoin", "x402", "agents"],
+            examples=["Pay for this URL and return the JSON: http://localhost:9000/vin/TESTVIN"],
         )
+
         agent_card = AgentCard(
-            name="Karley Agent",
-            description="An agent that manages Karley's schedule for pickleball games.",
+            name="PayStabl Agent",
+            description="An agent that executes payments for AI agents (x402 URLs, direct transfers, balances).",
             url=f"http://{host}:{port}/",
             version="1.0.0",
-            defaultInputModes=["text/plain"],
-            defaultOutputModes=["text/plain"],
+            defaultInputModes=["text/plain", "application/json"],
+            defaultOutputModes=["text/plain", "application/json"],
             capabilities=capabilities,
             skills=[skill],
         )
@@ -69,14 +70,17 @@ def main():
             session_service=InMemorySessionService(),
             memory_service=InMemoryMemoryService(),
         )
-        agent_executor = KarleyAgentExecutor(runner)
+
+        agent_executor = PayStablAgentExecutor(runner)
 
         request_handler = DefaultRequestHandler(
             agent_executor=agent_executor,
             task_store=InMemoryTaskStore(),
         )
+
         server = A2AStarletteApplication(
-            agent_card=agent_card, http_handler=request_handler
+            agent_card=agent_card,
+            http_handler=request_handler,
         )
 
         uvicorn.run(server.build(), host=host, port=port)
