@@ -7,8 +7,8 @@ from google.adk.artifacts import InMemoryArtifactService
 from google.adk.memory.in_memory_memory_service import InMemoryMemoryService
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
-from .agent import create_agent
-from .agent_executor import CarfaxAgentExecutor
+from agent import create_agent
+from agent_executor import CarfaxAgentExecutor
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

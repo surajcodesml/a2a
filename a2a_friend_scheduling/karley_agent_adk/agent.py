@@ -67,7 +67,7 @@ Rules:
 
 def create_agent() -> LlmAgent:
     return LlmAgent(
-        model="gemini-2.5-flash-preview-04-17",
+        model="gemini-2.0-flash",
         name="PayStabl Agent",
         instruction=INSTRUCTION,
         tools=[

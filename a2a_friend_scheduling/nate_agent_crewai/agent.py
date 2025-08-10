@@ -64,7 +64,7 @@ You are the Carfax Agent. Your job:
 
 def create_agent() -> LlmAgent:
     return LlmAgent(
-        model="gemini-2.5-flash-preview-04-17",
+        model="gemini-2.0-flash",
         name="Carfax Agent",
         instruction=INSTRUCTION,
         tools=[
