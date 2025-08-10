@@ -1,96 +1,54 @@
-import logging
-import os
-
-import uvicorn
+import logging, os, uvicorn
 from a2a.server.apps import A2AStarletteApplication
 from a2a.server.request_handlers import DefaultRequestHandler
 from a2a.server.tasks import InMemoryTaskStore
 from a2a.types import AgentCapabilities, AgentCard, AgentSkill
-from agent import create_agent
-from agent_executor import PayStablAgentExecutor
 from dotenv import load_dotenv
 from google.adk.artifacts import InMemoryArtifactService
 from google.adk.memory.in_memory_memory_service import InMemoryMemoryService
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
+from .agent import create_agent
+from .agent_executor import PayStablAgentExecutor
 
 load_dotenv()
-
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-
-class MissingAPIKeyError(Exception):
-    """Exception for missing API key."""
-    pass
-
-
 def main():
-    """Starts the PayStabl A2A agent server."""
-    host = "localhost"
-    port = 10002
-    try:
-        # Require API key unless using Vertex
-        if not os.getenv("GOOGLE_GENAI_USE_VERTEXAI") == "TRUE":
-            if not os.getenv("GOOGLE_API_KEY"):
-                raise MissingAPIKeyError(
-                    "GOOGLE_API_KEY environment variable not set and GOOGLE_GENAI_USE_VERTEXAI is not TRUE."
-                )
+    host = os.getenv("PAYSTABL_AGENT_HOST", "localhost")
+    port = int(os.getenv("PAYSTABL_AGENT_PORT", "10002"))
 
-        capabilities = AgentCapabilities(streaming=True)
+    capabilities = AgentCapabilities(streaming=True)
+    skill = AgentSkill(
+        id="pay402_and_fetch",
+        name="Pay x402 Endpoint",
+        description="Pays a 402-paywalled URL (stablecoins) and returns the raw body text. Inputs: { url, agent_token? }",
+        tags=["payments", "x402", "stablecoin", "agents"],
+        examples=["pay402_and_fetch {'url':'http://localhost:9000/vin/TESTVIN'}"],
+    )
 
-        # Core capability: pay x402 endpoints
-        skill = AgentSkill(
-            id="pay_402",
-            name="Pay x402 Endpoint",
-            description=(
-                "Pays a 402-paywalled URL using stablecoins and returns the provider's result. "
-                "Inputs: { url, agent_token }."
-            ),
-            tags=["payments", "stablecoin", "x402", "agents"],
-            examples=["Pay for this URL and return the JSON: http://localhost:9000/vin/TESTVIN"],
-        )
+    agent_card = AgentCard(
+        name="PayStabl Agent",
+        description="An agent that executes payments for AI agents (x402 URLs) and returns the provider body.",
+        url=f"http://{host}:{port}/",
+        version="1.0.0",
+        defaultInputModes=["text/plain", "application/json"],
+        defaultOutputModes=["text/plain"],
+        capabilities=capabilities,
+        skills=[skill],
+    )
 
-        agent_card = AgentCard(
-            name="PayStabl Agent",
-            description="An agent that executes payments for AI agents (x402 URLs, direct transfers, balances).",
-            url=f"http://{host}:{port}/",
-            version="1.0.0",
-            defaultInputModes=["text/plain", "application/json"],
-            defaultOutputModes=["text/plain", "application/json"],
-            capabilities=capabilities,
-            skills=[skill],
-        )
-
-        adk_agent = create_agent()
-        runner = Runner(
-            app_name=agent_card.name,
-            agent=adk_agent,
-            artifact_service=InMemoryArtifactService(),
-            session_service=InMemorySessionService(),
-            memory_service=InMemoryMemoryService(),
-        )
-
-        agent_executor = PayStablAgentExecutor(runner)
-
-        request_handler = DefaultRequestHandler(
-            agent_executor=agent_executor,
-            task_store=InMemoryTaskStore(),
-        )
-
-        server = A2AStarletteApplication(
-            agent_card=agent_card,
-            http_handler=request_handler,
-        )
-
-        uvicorn.run(server.build(), host=host, port=port)
-    except MissingAPIKeyError as e:
-        logger.error(f"Error: {e}")
-        exit(1)
-    except Exception as e:
-        logger.error(f"An error occurred during server startup: {e}")
-        exit(1)
-
+    runner = Runner(
+        app_name=agent_card.name,
+        agent=create_agent(),
+        artifact_service=InMemoryArtifactService(),
+        session_service=InMemorySessionService(),
+        memory_service=InMemoryMemoryService(),
+    )
+    handler = DefaultRequestHandler(agent_executor=PayStablAgentExecutor(runner), task_store=InMemoryTaskStore())
+    app = A2AStarletteApplication(agent_card=agent_card, http_handler=handler)
+    uvicorn.run(app.build(), host=host, port=port)
 
 if __name__ == "__main__":
     main()
