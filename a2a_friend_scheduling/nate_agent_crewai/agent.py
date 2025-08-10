@@ -1,137 +1,82 @@
-import os
-import random
-from datetime import date, datetime, timedelta
-from typing import Type
+import os, re, requests, json
+from typing import Optional, Dict, Any
+from google.adk.agents.llm_agent import Agent as LlmAgent
+from google.adk.tools.python_tool import PythonTool
 
-from crewai import LLM, Agent, Crew, Process, Task
-from crewai.tools import BaseTool
-from dotenv import load_dotenv
-from pydantic import BaseModel, Field
+PAYSTABL_CARD_URL = os.getenv("PAYSTABL_CARD_URL", "http://localhost:10002")
 
-load_dotenv()
-
-
-def generate_calendar() -> dict[str, list[str]]:
-    """Generates a random calendar for the next 7 days."""
-    calendar = {}
-    today = date.today()
-    possible_times = [f"{h:02}:00" for h in range(8, 21)]  # 8 AM to 8 PM
-
-    for i in range(7):
-        current_date = today + timedelta(days=i)
-        date_str = current_date.strftime("%Y-%m-%d")
-        available_slots = sorted(random.sample(possible_times, 8))
-        calendar[date_str] = available_slots
-    print("---- Nate's Generated Calendar ----")
-    print(calendar)
-    print("---------------------------------")
-    return calendar
-
-
-MY_CALENDAR = generate_calendar()
-
-
-class AvailabilityToolInput(BaseModel):
-    """Input schema for AvailabilityTool."""
-
-    date_range: str = Field(
-        ...,
-        description="The date or date range to check for availability, e.g., '2024-07-28' or '2024-07-28 to 2024-07-30'.",
-    )
-
-
-class AvailabilityTool(BaseTool):
-    name: str = "Calendar Availability Checker"
-    description: str = (
-        "Checks my availability for a given date or date range. "
-        "Use this to find out when I am free."
-    )
-    args_schema: Type[BaseModel] = AvailabilityToolInput
-
-    def _run(self, date_range: str) -> str:
-        """Checks my availability for a given date range."""
-        dates_to_check = [d.strip() for d in date_range.split("to")]
-        start_date_str = dates_to_check[0]
-        end_date_str = dates_to_check[-1]
-
+def _a2a_simple_task(agent_base_url: str, message: str, timeout: int = 90) -> str:
+    """Minimal A2A /tasks/simple client expecting first text part back."""
+    import requests
+    url = agent_base_url.rstrip("/") + "/tasks/simple"
+    r = requests.post(url, json={"message": message}, timeout=timeout)
+    r.raise_for_status()
+    if r.headers.get("content-type","").startswith("application/json"):
+        data = r.json()
         try:
-            start = datetime.strptime(start_date_str, "%Y-%m-%d").date()
-            end = datetime.strptime(end_date_str, "%Y-%m-%d").date()
+            for art in data["result"]["artifacts"]:
+                for part in art.get("parts", []):
+                    if part.get("type") == "text" and part.get("text"):
+                        return part["text"]
+        except Exception:
+            pass
+    return r.text
 
-            if start > end:
-                return (
-                    "Invalid date range. The start date cannot be after the end date."
-                )
+def paid_fetch(url: str, agent_token: Optional[str] = None) -> str:
+    """GET url; if 402 (x402), call PayStabl Agent to pay and fetch; return raw body."""
+    r = requests.get(url, timeout=45, allow_redirects=True)
+    if r.status_code != 402:
+        return r.text
+    payload = {"url": url}
+    if agent_token:
+        payload["agent_token"] = agent_token
+    msg = f"pay402_and_fetch {payload}"
+    return _a2a_simple_task(PAYSTABL_CARD_URL, msg)
 
-            results = []
-            delta = end - start
-            for i in range(delta.days + 1):
-                day = start + timedelta(days=i)
-                date_str = day.strftime("%Y-%m-%d")
-                available_slots = MY_CALENDAR.get(date_str, [])
-                if available_slots:
-                    availability = f"On {date_str}, I am available at: {', '.join(available_slots)}."
-                    results.append(availability)
-                else:
-                    results.append(f"I am not available on {date_str}.")
+def extract_vehicle_fields(raw: str) -> Dict[str, Any]:
+    """Very light extractor—good enough for demo. Improve as needed."""
+    def grab(pattern, text):
+        m = re.search(pattern, text, re.I)
+        return m.group(1).strip() if m else None
 
-            return "\n".join(results)
+    # naive grabs
+    vin = grab(r"\bVIN[:\s]*([A-HJ-NPR-Z0-9]{11,17})\b", raw)
+    make = grab(r"\bMake[:\s]*([A-Za-z0-9\- ]{2,30})\b", raw) or grab(r"\b([A-Z][a-z]+)\s+[A-Z][a-z]+\b", raw)
+    model = grab(r"\bModel[:\s]*([A-Za-z0-9\- ]{2,30})\b")
+    year = grab(r"\b(20\d{2}|19\d{2})\b", raw)
+    mileage = grab(r"\b(\d{1,3}(?:,\d{3})*)\s*(?:miles|mi)\b", raw)
 
-        except ValueError:
-            return (
-                "I couldn't understand the date. "
-                "Please ask to check availability for a date like 'YYYY-MM-DD'."
-            )
+    return {
+        "vin": vin,
+        "make": make,
+        "model": model,
+        "year": year,
+        "mileage": mileage,
+        "raw_len": len(raw),
+    }
 
+INSTRUCTION = """
+You are the Carfax Agent. Your job:
+1) Fetch listing/VIN pages (use `paid_fetch`). If the page is 402-paywalled, `paid_fetch` will route payment via PayStabl.
+2) Extract VIN, make, model, year, and mileage with `extract_vehicle_fields`.
+3) Return a concise JSON summary. No extra commentary.
+"""
 
-class SchedulingAgent:
-    """Agent that handles scheduling tasks."""
-
-    SUPPORTED_CONTENT_TYPES = ["text/plain"]
-
-    def __init__(self):
-        """Initializes the SchedulingAgent."""
-        if os.getenv("GOOGLE_API_KEY"):
-            self.llm = LLM(
-                model="gemini/gemini-2.0-flash",
-                api_key=os.getenv("GOOGLE_API_KEY"),
-            )
-        else:
-            raise ValueError("GOOGLE_API_KEY environment variable not set.")
-
-        self.scheduling_assistant = Agent(
-            role="Personal Scheduling Assistant",
-            goal="Check my calendar and answer questions about my availability.",
-            backstory=(
-                "You are a highly efficient and polite assistant. Your only job is "
-                "to manage my calendar. You are an expert at using the "
-                "Calendar Availability Checker tool to find out when I am free. You never "
-                "engage in conversations outside of scheduling."
+def create_agent() -> LlmAgent:
+    return LlmAgent(
+        model="gemini-2.5-flash-preview-04-17",
+        name="Carfax Agent",
+        instruction=INSTRUCTION,
+        tools=[
+            PythonTool(
+                func=paid_fetch,
+                name="paid_fetch",
+                description="Fetch a URL; if 402, pay via PayStabl and return raw page body."
             ),
-            verbose=True,
-            allow_delegation=False,
-            tools=[AvailabilityTool()],
-            llm=self.llm,
-        )
-
-    def invoke(self, question: str) -> str:
-        """Kicks off the crew to answer a scheduling question."""
-        task_description = (
-            f"Answer the user's question about my availability. The user asked: '{question}'. "
-            f"Today's date is {date.today().strftime('%Y-%m-%d')}."
-        )
-
-        check_availability_task = Task(
-            description=task_description,
-            expected_output="A polite and concise answer to the user's question about my availability, based on the calendar tool's output.",
-            agent=self.scheduling_assistant,
-        )
-
-        crew = Crew(
-            agents=[self.scheduling_assistant],
-            tasks=[check_availability_task],
-            process=Process.sequential,
-            verbose=True,
-        )
-        result = crew.kickoff()
-        return str(result)
+            PythonTool(
+                func=extract_vehicle_fields,
+                name="extract_vehicle_fields",
+                description="Extract VIN/make/model/year/mileage from raw page text."
+            ),
+        ],
+    )
