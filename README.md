@@ -1,6 +1,6 @@
-# PayStabl Agent Demo - X402 Payment Protocol
+# PayStabl Agent Demo - A2A Protocol
 
-This project demonstrates a multi-agent application that showcases the X402 payment protocol using PayStabl technology. The system allows agents to automatically handle paywalled content by facilitating secure payments through the PayStabl agent.
+This project demonstrates a multi-agent application that showcases the A2A protocol using PayStabl x402 payment agent. The system allows agents to automatically handle paywalled content by facilitating secure payments through the PayStabl agent.
 
 ## Overview
 
