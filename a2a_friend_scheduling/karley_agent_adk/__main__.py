@@ -48,7 +48,7 @@ def main():
                 "Inputs: { url, agent_token }."
             ),
             tags=["payments", "stablecoin", "x402", "agents"],
-            examples=["Pay for this URL and return the JSON: http://localhost:9000/vin/TESTVIN"],
+            examples=["Pay for this URL and return the JSON: url: https://proxy402.com/rZ0Or4VKA9?vin=JHMGE8H58DC009182"],
         )
 
         agent_card = AgentCard(

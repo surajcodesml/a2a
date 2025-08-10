@@ -203,7 +203,7 @@ def _get_initialized_host_agent_sync():
         # Two-agent world for demo:
         friend_agent_urls = [
             "http://localhost:10002",  # PayStabl Agent (pay402_and_fetch)
-            "http://localhost:10003",  # Carfax Agent (constructs/knows VIN endpoint)
+            "http://localhost:10004",  # Carfax Agent (constructs/knows VIN endpoint)
         ]
         print("initializing host agent")
         hosting_agent_instance = await HostAgent.create(remote_agent_addresses=friend_agent_urls)

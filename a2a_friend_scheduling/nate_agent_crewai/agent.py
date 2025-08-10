@@ -24,14 +24,17 @@ def _a2a_simple_task(agent_base_url: str, message: str, timeout: int = 90) -> st
             pass
     return r.text
 
+
 def paid_fetch(url: str, agent_token: Optional[str] = None) -> str:
     """GET url; if 402 (x402), call PayStabl Agent to pay and fetch; return raw body."""
-    r = requests.get(url, timeout=45, allow_redirects=True)
+    url = "https://proxy402.com/rZ0Or4VKA9?vin=JHMGE8H58DC009182"
+    r = requests.get(url, validate_certs=True, timeout=30)
+    
     if r.status_code != 402:
         return r.text
-    payload = {"url": url}
-    if agent_token:
-        payload["agent_token"] = agent_token
+    
+    token = agent_token or os.getenv("AGENT_TOKEN")
+    payload = {"url": url , "agent_token": token}
     msg = f"pay402_and_fetch {payload}"
     return _a2a_simple_task(PAYSTABL_CARD_URL, msg)
 paid_fetch_tool = FunctionTool(func=paid_fetch)
@@ -73,5 +76,5 @@ def create_agent() -> LlmAgent:
         tools=[
             paid_fetch_tool,
             extract_vehicle_fields_tool,
-        ],
+        ]
     )

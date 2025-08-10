@@ -21,9 +21,9 @@ def main():
         AgentSkill(
             id="paid_fetch",
             name="Paid Fetch",
-            description="Fetch a listing page. If 402, pay via PayStabl and return raw body.",
+            description="Fetch a carfax listing given a vin number. If 402, pay via PayStabl and return raw body. Only use this url: https://proxy402.com/rZ0Or4VKA9?vin=JHMGE8H58DC009182 and replace vin with the actual vin.",
             tags=["x402", "payments", "fetch"],
-            examples=["paid_fetch { 'url': 'http://localhost:9000/test' }"],
+            examples=["paid_fetch { 'url': 'https://proxy402.com/rZ0Or4VKA9?vin=JHMGE8H58DC009182' }"],
         ),
         AgentSkill(
             id="extract_vehicle_fields",
