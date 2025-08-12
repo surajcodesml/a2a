@@ -1,13 +1,13 @@
 # PayStabl Agent Demo - A2A Protocol
 
-This project demonstrates a multi-agent application that showcases the A2A protocol using PayStabl x402 payment agent. The system allows agents to automatically handle paywalled content by facilitating secure payments through the PayStabl agent.
+This project demos the paystabl's paywalled payment handling for other agent on the A2A protocol using x402 payment required. This system allows agents to automatically handle paywalled content by facilitating secure payments through the PayStabl agent.
 
 ## Overview
 
 This application contains three main agents:
 
 - **Host Agent**: The primary orchestrator that facilitates communication between agents
-- **Carfax Agent**: Demonstrates X402 payment by fetching vehicle data using VIN numbers from paywalled Carfax content  
+- **Carfax Agent**: Fetches vehicle data using VIN numbers from paywalled Carfax content  Demonstrates X402 payment by fetching vehicle data using VIN numbers from paywalled Carfax content  
 - **PayStabl Agent**: Handles the X402 payment protocol when content is behind a paywall (HTTP 402 status)
 
 ## How It Works
@@ -24,11 +24,12 @@ This application contains three main agents:
 
 Before running the application locally, ensure you have the following installed:
 
-1. **uv:** The Python package management tool used in this project. Follow the installation guide: [https://docs.astral.sh/uv/getting-started/installation/](https://docs.astral.sh/uv/getting-started/installation/)
-2. **Python 3.13:** Python 3.13 is required to run a2a-sdk 
-3. **Environment Configuration**
+1. **Python 3.13:** Python 3.13 is required to run a2a-sdk
+2. **uv:** The Python package management tool used in this project. Follow the installation guide: [https://docs.astral.sh/uv/getting-started/installation/](https://docs.astral.sh/uv/getting-started/installation/)  
+<pre> ```curl -LsSf https://astral.sh/uv/install.sh | sh ``` </pre>
+5. **Environment Configuration**
 
-Create a `.env` file in the root of the `a2a_friend_scheduling` directory with the following variables:
+Create a `.env` file in the root of the `a2a` directory with the following variables:
 ```bash
 GOOGLE_API_KEY="your_google_api_key_here"
 AGENT_TOKEN="your_agent_token_here"
@@ -41,7 +42,7 @@ You will need to run each agent in a separate terminal window. The first time yo
 
 ### Terminal 1: Run PayStabl Agent 
 ```bash
-cd karley_agent_adk
+cd paystabl_agent
 uv venv
 source .venv/bin/activate
 uv run --active .
@@ -49,7 +50,7 @@ uv run --active .
 
 ### Terminal 2: Run Carfax Agent
 ```bash
-cd nate_agent_crewai  
+cd carfax_agent 
 uv venv
 source .venv/bin/activate
 uv run --active .
@@ -63,6 +64,7 @@ source .venv/bin/activate
 uv run --active adk web      
 ```
 
+### A
 ## Interact with the System
 
 Once all agents are running, you can interact with the Host Agent to demonstrate the X402 payment protocol:
@@ -77,9 +79,9 @@ Once all agents are running, you can interact with the Host Agent to demonstrate
 ```
 a2a_friend_scheduling/
 ├── host_agent_adk/          # Host Agent - orchestrates conversations
-├── nate_agent_crewai/       # Carfax Agent - fetches vehicle data
-├── karley_agent_adk/        # PayStabl Agent - handles X402 payments
-└── ai_docs/                 # Documentation and task descriptions
+├── carfax_agent/       # Carfax Agent - fetches vehicle data
+├── paystable_agent_adk/        # PayStabl Agent - handles X402 payments
+└── scripts/                 # Documentation and scripts
 ```
 
 ## Key Features

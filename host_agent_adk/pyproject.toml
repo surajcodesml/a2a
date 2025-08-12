@@ -1,8 +1,8 @@
-# This file defines the workspace for the a2a-friend-scheduling project.
+# This file defines the workspace for the a2a-paystabl-demo project.
 # It tells uv that this project is a monorepo containing multiple packages.
 
 [project]
-name = "a2a-friend-scheduling"
+name = "a2a-paystabl-demo"
 version = "0.1.0"
 description = "A multi-agent system for scheduling pickleball games."
 readme = "README.md"

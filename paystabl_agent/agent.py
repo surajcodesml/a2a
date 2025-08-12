@@ -1,4 +1,4 @@
-# karley_agent_adk/agent.py
+# paystabl_agent/agent.py
 import os
 from google.adk.agents.llm_agent import Agent as LlmAgent
 from google.adk.tools.mcp_tool.mcp_toolset import MCPToolset, StdioServerParameters

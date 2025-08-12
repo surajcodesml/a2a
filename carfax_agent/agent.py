@@ -1,4 +1,4 @@
-import os, re, requests, json
+import os, re, requests
 from typing import Optional, Dict, Any
 from google.adk.agents.llm_agent import Agent as LlmAgent
 from google.adk.tools import FunctionTool

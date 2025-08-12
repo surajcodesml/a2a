@@ -8,7 +8,7 @@ resolution-markers = [
 ]
 
 [[package]]
-name = "a2a-friend-scheduling"
+name = "a2a-paystabl-demo"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
